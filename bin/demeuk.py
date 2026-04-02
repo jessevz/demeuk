@@ -147,7 +147,12 @@ from html import unescape
 from inspect import cleandoc
 from locale import LC_ALL, setlocale, getlocale
 from math import ceil
-from multiprocessing import cpu_count, Pool
+from multiprocessing import cpu_count
+from os import name as os_name
+if os_name == 'nt':
+    from multiprocessing.pool import ThreadPool as Pool
+else:
+    from multiprocessing import Pool
 from os import linesep, access, path, R_OK, F_OK, W_OK
 from re import compile as re_compile
 from re import search
@@ -1355,7 +1360,10 @@ def init_worker(config_data):
     global config
     config = config_data
 
-    signal(SIGINT, SIG_IGN)
+    try:
+        signal(SIGINT, SIG_IGN)
+    except ValueError:
+        pass  # signal() only works in the main thread; ThreadPool workers are threads
 
 
 def main():
