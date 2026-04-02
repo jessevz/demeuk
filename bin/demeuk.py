@@ -111,6 +111,8 @@ r"""
                                         becomes u, ç becomes c.
         --trim                          Enables removing newlines representations from end and beginning. Newline
                                         representations detected are '\\n', '\\r', '\n', '\r', '<br>', and '<br />'.
+        --transliterate <language>      Transliterate a strings, for example "ipsum" becomes "իպսում". The following
+                                        languages are supported: ka, sr, l1, ru, mn, uk, mk, el, hy and bg.
 
     Add modules (Modify a line, but keep the original as well):
         --add-lower                     If a line contains a capital letter this will add the lower case variant
@@ -142,6 +144,7 @@ r"""
                                             check-replacement-character, check-empty-line
 """
 from binascii import hexlify, unhexlify
+from collections import deque
 from glob import glob
 from html import unescape
 from inspect import cleandoc
@@ -173,10 +176,11 @@ from ftfy.fixes import fix_latin_ligatures
 from nltk import str2tuple
 from nltk.tokenize import WhitespaceTokenizer
 from tqdm import tqdm
+from transliterate import translit
 from unidecode import unidecode
 
 
-version = '4.5.0'
+version = '4.6.2'
 
 # Search from start to finish for the string $HEX[], with block of a-f0-9 with even number
 # of hex chars. The first match group is repeated.
@@ -682,6 +686,23 @@ def clean_cut(line, delimiters, fields):
         return False, line
 
 
+def clean_transliterate(line, language):
+    """Transliterate a string
+
+    Params:
+        line (Unicode)
+        language (str)
+
+    Returns:
+        line (Unicode)
+    """
+    cleaned_line = translit(line, language, reversed=True)
+    if line != cleaned_line:
+        return True, cleaned_line
+    else:
+        return False, line
+
+
 def clean_non_ascii(line):
     """Replace non ascii chars with there ascii representation.
 
@@ -1019,8 +1040,16 @@ def clean_up(lines):
     """
     results = []
     log = []
+    processed_lines = set()
+    work_queue = deque(lines)
 
-    for line in lines:
+    while work_queue:
+        line = work_queue.popleft()
+
+        if line in processed_lines:
+            continue
+        processed_lines.add(line)
+
         # Check if the limit is set, if so minus 1 and if 0 is reached lets quit.
         if type(config['limit']) is int:
             if config['limit'] > 0:
@@ -1060,7 +1089,7 @@ def clean_up(lines):
             if status:
                 # Lines contains hex, this function will return binary string, so add it back to
                 # our undecoded lines
-                lines.append(line_decoded)
+                work_queue.append(line_decoded)
                 if config['debug']:
                     log.append(f'Clean_hex; replaced $HEX[], added to queue and quiting; {line}{linesep}')
                 # Aborting future processing of this line.
@@ -1072,7 +1101,7 @@ def clean_up(lines):
             if status:
                 # Line contains html string, because this can be binary data (linefeeds etc)
                 # convert back to binary string and add to queue again.
-                lines.append(line_decoded.encode())
+                work_queue.append(line_decoded.encode())
                 if config['debug']:
                     log.append(f'Clean_html; replaced html, added to queue and quiting; {line_decoded}{linesep}')
                 stop = True
@@ -1122,6 +1151,12 @@ def clean_up(lines):
             status, line_decoded = clean_add_umlaut(line_decoded)
             if status and config['debug']:
                 log.append(f'Clean_umlaut; umlaut replaced; {line_decoded}{linesep}')
+
+        # Transliterate
+        if config.get('transliterate') and not stop:
+            status, line_decoded = clean_transliterate(line_decoded, config.get('transliterate'))
+            if status and config['debug']:
+                log.append(f'Clean_transliterate; translitatered; {line_decoded}{linesep}')
 
         # Replace non-ascii
         if config.get('non-ascii') and not stop:
@@ -1286,49 +1321,49 @@ def clean_up(lines):
                     for modified_line in modified_lines:
                         if config['debug']:
                             log.append(f'Add_split; new line because of split; {modified_line}{linesep}')
-                        lines.append(modified_line.encode())
+                        work_queue.append(modified_line.encode())
 
             if config.get('add-lower'):
                 modified_line = add_lower(line_decoded)
                 if modified_line:
                     if config['debug']:
                         log.append(f'Add_lower; new line; {modified_line}{linesep}')
-                    lines.append(modified_line.encode())
+                    work_queue.append(modified_line.encode())
 
             if config.get('add-first-upper'):
                 modified_line = add_first_upper(line_decoded)
                 if modified_line:
                     if config['debug']:
                         log.append(f'Add_first_upper; new line; {modified_line}{linesep}')
-                    lines.append(modified_line.encode())
+                    work_queue.append(modified_line.encode())
 
             if config.get('add-title-case'):
                 modified_line = add_title_case(line_decoded)
                 if modified_line:
                     if config['debug']:
                         log.append(f'Add_title_case; new line; {modified_line}{linesep}')
-                    lines.append(modified_line.encode())
+                    work_queue.append(modified_line.encode())
 
             if config.get('add-latin-ligatures'):
                 modified_line = add_latin_ligatures(line_decoded)
                 if modified_line:
                     if config['debug']:
                         log.append(f'Add_latin_ligatures; new line; {modified_line}{linesep}')
-                    lines.append(modified_line.encode())
+                    work_queue.append(modified_line.encode())
 
             if config.get('add-umlaut'):
                 status, modified_line = clean_add_umlaut(line_decoded)
                 if status:
                     if config['debug']:
                         log.append(f'Add_umlaut; new line; {modified_line}{linesep}')
-                    lines.append(modified_line.encode())
+                    work_queue.append(modified_line.encode())
 
             if config.get('add-without-punctuation'):
                 modified_line = add_without_punctuation(line_decoded, config.get('punctuation'))
                 if modified_line:
                     if config['debug']:
                         log.append(f'Add_without_punctuation; new line; {modified_line}{linesep}')
-                    lines.append(modified_line.encode())
+                    work_queue.append(modified_line.encode())
 
             if config['debug']:
                 log.append(f'----End---- {line_decoded}{linesep}{linesep}')
@@ -1413,6 +1448,7 @@ def main():
         'umlaut': False,
         'non-ascii': False,
         'title_case': False,
+        'transliterate': False,
 
         # Check
         'length': False,
@@ -1545,6 +1581,9 @@ def main():
 
     if arguments.get('--trim'):
         config['trim'] = True
+
+    if arguments.get('--transliterate'):
+        config['transliterate'] = arguments.get('--transliterate')
 
     # Check modules
     if arguments.get('--check-min-length'):

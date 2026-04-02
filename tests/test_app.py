@@ -3,7 +3,7 @@ from subprocess import PIPE, run
 from os import name, linesep
 from unittest.mock import patch
 
-from pytest import raises
+from pytest import raises, mark
 
 from bin.demeuk import main
 
@@ -189,7 +189,7 @@ def test_language_processing():
     with patch.object(sys, 'argv', testargs):
         main()
     line_num_output = calculate_line_numbers('testdata/output11')
-    assert line_num_output == 29
+    assert line_num_output == 21
     with open('testdata/output11', encoding='utf-8') as f:
         filecontent = f.read()
         assert 'cĳfer\n' in filecontent
@@ -990,3 +990,40 @@ def test_check_contains():
     assert '_amsterdam' not in filecontent
     assert 'ROTTERDAM_' not in filecontent
     assert 'Cookie Monster' in filecontent
+
+
+@mark.timeout(1)
+def test_infinite_loop():
+    testargs = [
+        'demeuk', '-i', 'testdata/input54', '-o', 'testdata/output54', '-l', 'testdata/log54',
+        '--add-lower', '--add-title-case',
+    ]
+
+    with patch.object(sys, 'argv', testargs):
+        main()
+
+    with open('testdata/output54') as f:
+        filecontent = f.read()
+
+    line_num_output = calculate_line_numbers('testdata/output54')
+    assert line_num_output == 4
+    assert 'Golf Trip' in filecontent
+    assert 'Sequences' in filecontent
+    assert 'golf trip' in filecontent
+    assert 'sequences' in filecontent
+
+
+def test_transliterate():
+    testargs = [
+        'demeuk', '-i', 'testdata/input55', '-o', 'testdata/output55', '-l', 'testdata/log55',
+        '--transliterate', 'sr', '--non-ascii'
+    ]
+
+    with patch.object(sys, 'argv', testargs):
+        main()
+
+    with open('testdata/output55') as f:
+        filecontent = f.read()
+
+    assert 'zdravo prijatelju' in filecontent
+    assert 'zuta banana' in filecontent

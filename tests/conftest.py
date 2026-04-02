@@ -393,3 +393,11 @@ with open('testdata/input53', 'w', encoding='utf-8') as file:
     file.write(f'_amsterdam {linesep}')
     file.write(f'ROTTERDAM_ {linesep}')
     file.write(f'Cookie Monster {linesep}')
+
+with open('testdata/input54', 'w') as file:
+    file.write(f'Golf Trip{linesep}')
+    file.write(f'Sequences{linesep}')
+
+with open('testdata/input55', 'w') as file:
+    file.write(f'здраво пријатељу{linesep}')
+    file.write(f'жута банана{linesep}')
